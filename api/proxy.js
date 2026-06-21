@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
   try {
     const response = await fetch(targetUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36",
         "Referer": urlObj.origin
       }
     });
@@ -37,14 +37,26 @@ module.exports = async function handler(req, res) {
                  return `/api/proxy?url=${encodeURIComponent(absUrl)}`;
              } catch { return line; }
          }
+         if (trimmed.startsWith("#EXT-X-") && trimmed.includes('URI=')) {
+             return trimmed.replace(/URI="([^"]+)"/, (match, uriParam) => {
+                 try {
+                     const absUrl = new URL(uriParam, baseUrl).toString();
+                     return `URI="/api/proxy?url=${encodeURIComponent(absUrl)}"`;
+                 } catch { return match; }
+             });
+         }
          return line;
       });
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
       return res.status(200).send(rewrittenLines.join("\n"));
     } else {
       res.setHeader("Content-Type", contentType);
-      const buffer = await response.arrayBuffer();
-      return res.status(200).send(Buffer.from(buffer));
+      if (response.body) {
+        const { Readable } = require("stream");
+        Readable.fromWeb(response.body).pipe(res);
+      } else {
+        res.end();
+      }
     }
   } catch (err) {
     res.status(500).send(`Proxy error: ${err.message}`);

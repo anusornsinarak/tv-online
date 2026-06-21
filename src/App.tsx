@@ -15,12 +15,39 @@ const TV_PRESETS = [
   { id: 'amer', label: 'AMERICA', url: 'https://iptv-org.github.io/iptv/regions/amer.m3u' },
   { id: 'movies', label: 'MOVIES', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
   { id: 'sports', label: 'SPORTS', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
-  { id: 'adult', label: '🔞 18+ VIP', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSIiIGdyb3VwLXRpdGxlPSIxOCsgVklQIixWSVAgQ2hhbm5lbCAxIChEZW1vKQpodHRwczovL3Rlc3Qtc3RyZWFtcy5tdXguZGV2L3gzNnhoenoveDM2eGh6ei5tM3U4CiNFWFRJTkY6LTEgdHZnLWxvZ289IiIgZ3JvdXAtdGl0bGU9IjE4KyBWSVAiLFZJUCBDaGFubmVsIDIgKERlbW8pCmh0dHBzOi8vdGVzdC1zdHJlYW1zLm11eC5kZXYveDM2eGh6ei94MzZ4aHp6Lm0zdTg=', isProtected: true },
+  { 
+    id: 'adult', 
+    label: '🔞 18+ VIP', 
+    url: 'vip-channels', 
+    isProtected: true, 
+    channels: [
+      { name: "VIP Channel 1 (Demo)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "18+ VIP" },
+      { name: "VIP Channel 2 (Demo)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "18+ VIP" }
+    ]
+  },
 ];
 
 const RADIO_PRESETS = [
-  { id: 'r-th', label: 'THAI RADIO', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSJodHRwczovL2Nkbi5waXhhYmF5LmNvbS9waG90by8yMDEzLzA3LzEyLzE4LzE3L3JhZGlvLTE1MzIxMl8xMjgwLnBuZyIgZ3JvdXAtdGl0bGU9IlRoYWkgUmFkaW8iLEhpdHogOTU1Cmh0dHBzOi8vbWNvdHJjMDEuaWNlLmluZm9tYW5pYWsuY2gvbWNvdHJjMDEubXAzCiNFWFRJTkY6LTEgdHZnLWxvZ289Imh0dHBzOi8vY2RuLnBpeGFiYXkuY29tL3Bob3RvLzIwMTMvMDcvMTIvMTgvMTcvcmFkaW8tMTUzMjEyXzEyODAucG5nIiBncm91cC10aXRsZT0iVGhhaSBSYWRpbyIsRWF6eSBGTSAxMDUuNQpodHRwczovL21jb3RyYzAyLmljZS5pbmZvbWFuaWFrLmNoL21jb3RyYzAyLm1wMwojRVhUSU5GOi0xIHR2Zy1sb2dvPSJodHRwczovL2Nkbi5waXhhYmF5LmNvbS9waG90by8yMDEzLzA3LzEyLzE4LzE3L3JhZGlvLTE1MzIxMl8xMjgwLnBuZyIgZ3JvdXAtdGl0bGU9IlRoYWkgUmFkaW8iLEdyZWVuIFdhdmUgMTA2LjUKaHR0cHM6Ly9tY290cmMwMy5pY2UuaW5mb21hbmlhay5jaC9tY290cmMwMy5tcDM=' },
-  { id: 'r-global', label: 'GLOBAL RADIO', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSIiIGdyb3VwLXRpdGxlPSJHbG9iYWwgUmFkaW8iLEJCQyBSYWRpbyAxCmh0dHA6Ly9zdHJlYW0ubGl2ZS52Yy5iYmNtZWRpYS5jby51ay9iYmNfcmFkaW9fb25lCiNFWFRJTkY6LTEgdHZnLWxvZ289IiIgZ3JvdXAtdGl0bGU9Ikdsb2JhbCBSYWRpbyIsQ2FwaXRhbCBGTQpodHRwczovL2ljZWNhc3QudGhpc2lzZGF4LmNvbS9DYXBpdGFsVUtNUDMKI0VYVElORjotMSB0dmctbG9nbz0iIiBncm91cC10aXRsZT0iR2xvYmFsIFJhZGlvIixIZWFydCBGTQpodHRwczovL2ljZWNhc3QudGhpc2lzZGF4LmNvbS9IZWFydFVLTVAz' },
+  { 
+    id: 'r-th', 
+    label: 'THAI RADIO', 
+    url: 'radio-th', 
+    channels: [
+      { name: "Hitz 955", url: "https://mcotrc01.ice.infomaniak.ch/mcotrc01.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
+      { name: "Eazy FM 105.5", url: "https://mcotrc02.ice.infomaniak.ch/mcotrc02.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
+      { name: "Green Wave 106.5", url: "https://mcotrc03.ice.infomaniak.ch/mcotrc03.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" }
+    ]
+  },
+  { 
+    id: 'r-global', 
+    label: 'GLOBAL RADIO', 
+    url: 'radio-global',
+    channels: [
+      { name: "BBC Radio 1", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_one", group: "Global Radio" },
+      { name: "Capital FM", url: "https://icecast.thisisdax.com/CapitalUKMP3", group: "Global Radio" },
+      { name: "Heart FM", url: "https://icecast.thisisdax.com/HeartUKMP3", group: "Global Radio" }
+    ]
+  },
 ];
 
 export default function App() {
@@ -117,18 +144,25 @@ export default function App() {
     }
   };
 
-  const loadPlaylist = (url: string, isProtected = false) => {
-    if (isProtected) {
+  const loadPlaylist = (preset: typeof TV_PRESETS[0] | any) => {
+    if (preset.isProtected) {
       const pwd = window.prompt("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน 18+ VIP (0909142651)");
       if (pwd !== "0909142651") {
         alert("รหัสผ่านไม่ถูกต้อง");
         return;
       }
     }
-    setPlaylistUrl(url);
-    fetchPlaylist(url).then(channels => {
-      if (channels && channels.length > 0) setSelectedChannel(channels[0]);
-    });
+    setPlaylistUrl(preset.url);
+
+    if (preset.channels) {
+       // Direct load from built-in channels
+       setChannels(preset.channels);
+       if (preset.channels.length > 0) setSelectedChannel(preset.channels[0]);
+    } else {
+      fetchPlaylist(preset.url).then(channels => {
+        if (channels && channels.length > 0) setSelectedChannel(channels[0]);
+      });
+    }
   };
 
   // Initial load from URL
@@ -137,10 +171,8 @@ export default function App() {
     const pUrl = params.get("playlist") || "https://iptv-org.github.io/iptv/countries/th.m3u";
     const cUrl = params.get("channel");
     
-    setPlaylistUrl(pUrl);
-    
     // Check if loading adult from URL
-    if (pUrl.toLowerCase().includes("adult") || pUrl.toLowerCase().includes("xxx")) {
+    if (pUrl.toLowerCase().includes("adult") || pUrl.toLowerCase().includes("vip-channels") || pUrl.toLowerCase().includes("xxx")) {
        const pwd = window.prompt("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน 18+ VIP (0909142651)");
        if (pwd !== "0909142651") {
           alert("รหัสผ่านไม่ถูกต้อง");
@@ -148,15 +180,32 @@ export default function App() {
        }
     }
 
-    fetchPlaylist(pUrl).then(data => {
-      if (cUrl && data) {
-        const found = data.find((c: Channel) => c.url === cUrl);
-        if (found) setSelectedChannel(found);
-        else if (data.length > 0) setSelectedChannel(data[0]);
-      } else if (data && data.length > 0) {
-        setSelectedChannel(data[0]);
+    // Is it a static predefined literal?
+    const allPresets = [...TV_PRESETS, ...RADIO_PRESETS];
+    const matchingPreset = allPresets.find(p => p.url === pUrl);
+    
+    if (matchingPreset && matchingPreset.channels) {
+      setPlaylistUrl(matchingPreset.url);
+      setChannels(matchingPreset.channels);
+      if (cUrl) {
+         const found = matchingPreset.channels.find(c => c.url === cUrl);
+         if (found) setSelectedChannel(found);
+         else if (matchingPreset.channels.length > 0) setSelectedChannel(matchingPreset.channels[0]);
+      } else if (matchingPreset.channels.length > 0) {
+         setSelectedChannel(matchingPreset.channels[0]);
       }
-    });
+    } else {
+      setPlaylistUrl(pUrl);
+      fetchPlaylist(pUrl).then(data => {
+        if (cUrl && data) {
+          const found = data.find((c: Channel) => c.url === cUrl);
+          if (found) setSelectedChannel(found);
+          else if (data.length > 0) setSelectedChannel(data[0]);
+        } else if (data && data.length > 0) {
+          setSelectedChannel(data[0]);
+        }
+      });
+    }
   }, []);
 
   // Update URL on change
@@ -399,7 +448,7 @@ export default function App() {
             {selectedChannel ? (
             <div className="relative z-20 w-full h-full flex flex-col group/player">
                 <HlsPlayer 
-                  url={useProxy ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} 
+                  url={useProxy && !selectedChannel.url.toLowerCase().endsWith('.mp3') && !selectedChannel.url.toLowerCase().endsWith('.aac') ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} 
                   originalUrl={selectedChannel.url}
                 />
                 
