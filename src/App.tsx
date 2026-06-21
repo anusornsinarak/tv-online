@@ -15,12 +15,12 @@ const TV_PRESETS = [
   { id: 'amer', label: 'AMERICA', url: 'https://iptv-org.github.io/iptv/regions/amer.m3u' },
   { id: 'movies', label: 'MOVIES', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
   { id: 'sports', label: 'SPORTS', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
-  { id: 'adult', label: '🔞 18+ VIP', url: '/api/playlists/adult.m3u', isProtected: true },
+  { id: 'adult', label: '🔞 18+ VIP', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSIiIGdyb3VwLXRpdGxlPSIxOCsgVklQIixWSVAgQ2hhbm5lbCAxIChEZW1vKQpodHRwczovL3Rlc3Qtc3RyZWFtcy5tdXguZGV2L3gzNnhoenoveDM2eGh6ei5tM3U4CiNFWFRJTkY6LTEgdHZnLWxvZ289IiIgZ3JvdXAtdGl0bGU9IjE4KyBWSVAiLFZJUCBDaGFubmVsIDIgKERlbW8pCmh0dHBzOi8vdGVzdC1zdHJlYW1zLm11eC5kZXYveDM2eGh6ei94MzZ4aHp6Lm0zdTg=', isProtected: true },
 ];
 
 const RADIO_PRESETS = [
-  { id: 'r-th', label: 'THAI RADIO', url: '/api/playlists/radio-th.m3u' },
-  { id: 'r-global', label: 'GLOBAL RADIO', url: '/api/playlists/radio-global.m3u' },
+  { id: 'r-th', label: 'THAI RADIO', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSJodHRwczovL2Nkbi5waXhhYmF5LmNvbS9waG90by8yMDEzLzA3LzEyLzE4LzE3L3JhZGlvLTE1MzIxMl8xMjgwLnBuZyIgZ3JvdXAtdGl0bGU9IlRoYWkgUmFkaW8iLEhpdHogOTU1Cmh0dHBzOi8vbWNvdHJjMDEuaWNlLmluZm9tYW5pYWsuY2gvbWNvdHJjMDEubXAzCiNFWFRJTkY6LTEgdHZnLWxvZ289Imh0dHBzOi8vY2RuLnBpeGFiYXkuY29tL3Bob3RvLzIwMTMvMDcvMTIvMTgvMTcvcmFkaW8tMTUzMjEyXzEyODAucG5nIiBncm91cC10aXRsZT0iVGhhaSBSYWRpbyIsRWF6eSBGTSAxMDUuNQpodHRwczovL21jb3RyYzAyLmljZS5pbmZvbWFuaWFrLmNoL21jb3RyYzAyLm1wMwojRVhUSU5GOi0xIHR2Zy1sb2dvPSJodHRwczovL2Nkbi5waXhhYmF5LmNvbS9waG90by8yMDEzLzA3LzEyLzE4LzE3L3JhZGlvLTE1MzIxMl8xMjgwLnBuZyIgZ3JvdXAtdGl0bGU9IlRoYWkgUmFkaW8iLEdyZWVuIFdhdmUgMTA2LjUKaHR0cHM6Ly9tY290cmMwMy5pY2UuaW5mb21hbmlhay5jaC9tY290cmMwMy5tcDM=' },
+  { id: 'r-global', label: 'GLOBAL RADIO', url: 'data:application/vnd.apple.mpegurl;base64,I0VYVE0zVQojRVhUSU5GOi0xIHR2Zy1sb2dvPSIiIGdyb3VwLXRpdGxlPSJHbG9iYWwgUmFkaW8iLEJCQyBSYWRpbyAxCmh0dHA6Ly9zdHJlYW0ubGl2ZS52Yy5iYmNtZWRpYS5jby51ay9iYmNfcmFkaW9fb25lCiNFWFRJTkY6LTEgdHZnLWxvZ289IiIgZ3JvdXAtdGl0bGU9Ikdsb2JhbCBSYWRpbyIsQ2FwaXRhbCBGTQpodHRwczovL2ljZWNhc3QudGhpc2lzZGF4LmNvbS9DYXBpdGFsVUtNUDMKI0VYVElORjotMSB0dmctbG9nbz0iIiBncm91cC10aXRsZT0iR2xvYmFsIFJhZGlvIixIZWFydCBGTQpodHRwczovL2ljZWNhc3QudGhpc2lzZGF4LmNvbS9IZWFydFVLTVAz' },
 ];
 
 export default function App() {
@@ -58,21 +58,57 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/parse-m3u", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
+      // First try the backend proxy (if running in full-stack mode)
+      let res;
+      try {
+        res = await fetch("/api/parse-m3u", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+      } catch (e) {
+        // Network error reaching proxy
+      }
       
-      if (!res.ok) {
-        throw new Error("Failed to load playlist.");
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setChannels(data.channels);
+        return data.channels;
       }
 
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      // Fallback: Client-side parsing (for static Vercel deployments)
+      const directRes = await fetch(url);
+      if (!directRes.ok) throw new Error("Failed to load playlist directly.");
+      const text = await directRes.text();
+      
+      const lines = text.split(/\r?\n/);
+      const parsedChannels: Channel[] = [];
+      let currentChannel: Partial<Channel> = {};
 
-      setChannels(data.channels);
-      return data.channels;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("#EXTINF:")) {
+          const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+          const groupMatch = line.match(/group-title="([^"]+)"/);
+          const nameMatch = line.match(/,(.+)$/);
+
+          currentChannel = {
+            name: nameMatch ? nameMatch[1].trim() : "Unknown Channel",
+            logo: logoMatch ? logoMatch[1] : undefined,
+            group: groupMatch ? groupMatch[1] : undefined,
+          };
+        } else if (line && !line.startsWith("#")) {
+          if (currentChannel.name) {
+            currentChannel.url = line;
+            parsedChannels.push(currentChannel as Channel);
+            currentChannel = {};
+          }
+        }
+      }
+      setChannels(parsedChannels);
+      return parsedChannels;
+      
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
       return [];
