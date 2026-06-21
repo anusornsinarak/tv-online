@@ -144,7 +144,16 @@ export default function App() {
     }
   };
 
-  const loadPlaylist = (preset: typeof TV_PRESETS[0] | any) => {
+  const loadPlaylist = (presetOrUrl: typeof TV_PRESETS[0] | string | any) => {
+    if (typeof presetOrUrl === 'string') {
+      setPlaylistUrl(presetOrUrl);
+      fetchPlaylist(presetOrUrl).then(channels => {
+        if (channels && channels.length > 0) setSelectedChannel(channels[0]);
+      });
+      return;
+    }
+
+    const preset = presetOrUrl;
     if (preset.isProtected) {
       const pwd = window.prompt("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน 18+ VIP (0909142651)");
       if (pwd !== "0909142651") {

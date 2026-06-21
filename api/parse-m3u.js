@@ -1,4 +1,4 @@
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
     const { url } = req.body || {};
     if (!url) return res.status(400).json({ error: "URL is required" });
@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
 }
 
 function parseM3uText(text) {
-  const lines = text.split(/\\r?\\n/);
+  const lines = text.split(/\r?\n/);
   const parsedChannels = [];
   let currentChannel = {};
 

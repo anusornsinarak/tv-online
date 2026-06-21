@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { Readable } from "stream";
 
 async function startServer() {
   const app = express();
@@ -68,8 +69,7 @@ async function startServer() {
         // Stream raw data (.ts video chunks, encryption keys, or infinite radio streams)
         res.setHeader("Content-Type", contentType);
         if (response.body) {
-          const { Readable } = require("stream");
-          Readable.fromWeb(response.body).pipe(res);
+          Readable.fromWeb(response.body as any).pipe(res);
         } else {
           res.end();
         }
