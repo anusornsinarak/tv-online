@@ -6,7 +6,14 @@ import { Tv, List, Search, Play, HelpCircle, Activity, Star, Share2, Radio, Lock
 
 type TabType = 'tv' | 'radio' | 'favorites';
 
-const TV_PRESETS = [
+interface Preset {
+  id: string;
+  label: string;
+  url: string;
+  channels?: Channel[];
+}
+
+const TV_PRESETS: Preset[] = [
   { id: 'th', label: 'THAI (ไทย)', url: 'https://iptv-org.github.io/iptv/countries/th.m3u' },
   { id: 'kr', label: 'KOREA', url: 'https://iptv-org.github.io/iptv/countries/kr.m3u' },
   { id: 'jp', label: 'JAPAN', url: 'https://iptv-org.github.io/iptv/countries/jp.m3u' },
@@ -16,19 +23,9 @@ const TV_PRESETS = [
   { id: 'amer', label: 'AMERICA', url: 'https://iptv-org.github.io/iptv/regions/amer.m3u' },
   { id: 'movies', label: 'MOVIES', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
   { id: 'sports', label: 'SPORTS', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
-  { 
-    id: 'adult', 
-    label: '🔞 18+ VIP', 
-    url: 'vip-channels', 
-    isProtected: true, 
-    channels: [
-      { name: "VIP Channel 1 (Demo)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "18+ VIP" },
-      { name: "VIP Channel 2 (Demo)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", group: "18+ VIP" }
-    ]
-  },
 ];
 
-const RADIO_PRESETS = [
+const RADIO_PRESETS: Preset[] = [
   { 
     id: 'r-th', 
     label: 'วิทยุไทย (THAI)', 
@@ -64,9 +61,38 @@ const RADIO_PRESETS = [
   },
 ];
 
+function parseM3U(text: string): Channel[] {
+  const lines = text.split(/\r?\n/);
+  const parsedChannels: Channel[] = [];
+  let currentChannel: Partial<Channel> = {};
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith("#EXTINF:")) {
+      const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+      const groupMatch = line.match(/group-title="([^"]+)"/);
+      const nameMatch = line.match(/,(.+)$/);
+
+      currentChannel = {
+        name: nameMatch ? nameMatch[1].trim() : "Unknown Channel",
+        logo: logoMatch ? logoMatch[1] : undefined,
+        group: groupMatch ? groupMatch[1] : undefined,
+      };
+    } else if (line && !line.startsWith("#")) {
+      if (currentChannel.name) {
+        currentChannel.url = line;
+        parsedChannels.push(currentChannel as Channel);
+        currentChannel = {};
+      }
+    }
+  }
+  return parsedChannels;
+}
+
 export default function App() {
   const [playlistUrl, setPlaylistUrl] = useState("https://iptv-org.github.io/iptv/countries/th.m3u");
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [globalPool, setGlobalPool] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +106,39 @@ export default function App() {
       return item ? JSON.parse(item) : [];
     } catch { return []; }
   });
+
+  // Background indexing for global search
+  useEffect(() => {
+    // Initial pool with radio channels
+    const radioChannels = RADIO_PRESETS.flatMap(p => p.channels || []);
+    setGlobalPool(radioChannels);
+
+    const loadGlobalPool = async () => {
+      // Small delay to let initial page load finish
+      await new Promise(r => setTimeout(r, 2000));
+      
+      for (const preset of TV_PRESETS) {
+        try {
+          const res = await fetch(preset.url);
+          if (!res.ok) continue;
+          const text = await res.text();
+          const parsed = parseM3U(text);
+          setGlobalPool(prev => {
+            const combined = [...prev, ...parsed];
+            const uniqueMap = new Map();
+            combined.forEach(c => uniqueMap.set(c.url, c));
+            return Array.from(uniqueMap.values());
+          });
+          // Small delay between fetches to be nice
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.error(`Search index failed for ${preset.label}:`, e);
+        }
+      }
+    };
+
+    loadGlobalPool();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('iptv_favorites', JSON.stringify(favorites));
@@ -123,30 +182,7 @@ export default function App() {
       if (!directRes.ok) throw new Error("Failed to load playlist directly.");
       const text = await directRes.text();
       
-      const lines = text.split(/\r?\n/);
-      const parsedChannels: Channel[] = [];
-      let currentChannel: Partial<Channel> = {};
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line.startsWith("#EXTINF:")) {
-          const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-          const groupMatch = line.match(/group-title="([^"]+)"/);
-          const nameMatch = line.match(/,(.+)$/);
-
-          currentChannel = {
-            name: nameMatch ? nameMatch[1].trim() : "Unknown Channel",
-            logo: logoMatch ? logoMatch[1] : undefined,
-            group: groupMatch ? groupMatch[1] : undefined,
-          };
-        } else if (line && !line.startsWith("#")) {
-          if (currentChannel.name) {
-            currentChannel.url = line;
-            parsedChannels.push(currentChannel as Channel);
-            currentChannel = {};
-          }
-        }
-      }
+      const parsedChannels = parseM3U(text);
       setChannels(parsedChannels);
       return parsedChannels;
       
@@ -168,13 +204,6 @@ export default function App() {
     }
 
     const preset = presetOrUrl;
-    if (preset.isProtected) {
-      const pwd = window.prompt("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน 18+ VIP (0909142651)");
-      if (pwd !== "0909142651") {
-        alert("รหัสผ่านไม่ถูกต้อง");
-        return;
-      }
-    }
     setPlaylistUrl(preset.url);
 
     if (preset.channels) {
@@ -214,28 +243,20 @@ export default function App() {
     const pUrl = params.get("playlist") || "https://iptv-org.github.io/iptv/countries/th.m3u";
     const cUrl = params.get("channel");
     
-    // Check if loading adult from URL
-    if (pUrl.toLowerCase().includes("adult") || pUrl.toLowerCase().includes("vip-channels") || pUrl.toLowerCase().includes("xxx")) {
-       const pwd = window.prompt("กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน 18+ VIP (0909142651)");
-       if (pwd !== "0909142651") {
-          alert("รหัสผ่านไม่ถูกต้อง");
-          return;
-       }
-    }
-
     // Is it a static predefined literal?
-    const allPresets = [...TV_PRESETS, ...RADIO_PRESETS];
+    const allPresets: Preset[] = [...TV_PRESETS, ...RADIO_PRESETS];
     const matchingPreset = allPresets.find(p => p.url === pUrl);
     
     if (matchingPreset && matchingPreset.channels) {
+      const presetChannels = matchingPreset.channels;
       setPlaylistUrl(matchingPreset.url);
-      setChannels(matchingPreset.channels);
+      setChannels(presetChannels);
       if (cUrl) {
-         const found = matchingPreset.channels.find(c => c.url === cUrl);
+         const found = presetChannels.find(c => c.url === cUrl);
          if (found) setSelectedChannel(found);
-         else if (matchingPreset.channels.length > 0) setSelectedChannel(matchingPreset.channels[0]);
-      } else if (matchingPreset.channels.length > 0) {
-         setSelectedChannel(matchingPreset.channels[0]);
+         else if (presetChannels.length > 0) setSelectedChannel(presetChannels[0]);
+      } else if (presetChannels.length > 0) {
+         setSelectedChannel(presetChannels[0]);
       }
     } else {
       setPlaylistUrl(pUrl);
@@ -269,10 +290,21 @@ export default function App() {
   };
 
   const getDisplayChannels = () => {
-    let source = activeTab === 'favorites' ? favorites : channels;
-    return source.filter(c => 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (c.group && c.group.toLowerCase().includes(searchQuery.toLowerCase()))
+    if (!searchQuery) {
+      return activeTab === 'favorites' ? favorites : channels;
+    }
+
+    // Integrated search: scan current view, favorites, and global background index
+    const combined = [...channels, ...favorites, ...globalPool];
+    
+    const uniqueMap = new Map();
+    combined.forEach(c => uniqueMap.set(c.url, c));
+    const uniqueSource = Array.from(uniqueMap.values()) as Channel[];
+    
+    const query = searchQuery.toLowerCase();
+    return uniqueSource.filter(c => 
+      c.name.toLowerCase().includes(query) || 
+      (c.group && c.group.toLowerCase().includes(query))
     );
   };
 
@@ -330,7 +362,7 @@ export default function App() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
             <input
               type="text"
-              placeholder="ค้นหาช่อง..."
+              placeholder="ค้นหาช่องจากรายการทั้งหมด..."
               value={searchQuery}
               onChange={handleSearch}
               className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500/50 text-white placeholder-white/40 transition-all"
