@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
+import { motion } from "motion/react";
 import { Channel } from "./types";
 import { HlsPlayer } from "./components/HlsPlayer";
-import { Tv, List, Search, Play, HelpCircle, Activity, Star, Share2, Radio, Lock, Copy } from "lucide-react";
+import { Tv, List, Search, Play, HelpCircle, Activity, Star, Share2, Radio, Lock, Copy, Maximize, Minimize } from "lucide-react";
 
 type TabType = 'tv' | 'radio' | 'favorites';
 
@@ -30,22 +31,35 @@ const TV_PRESETS = [
 const RADIO_PRESETS = [
   { 
     id: 'r-th', 
-    label: 'THAI RADIO', 
+    label: 'วิทยุไทย (THAI)', 
     url: 'radio-th', 
     channels: [
-      { name: "Hitz 955", url: "https://mcotrc01.ice.infomaniak.ch/mcotrc01.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
-      { name: "Eazy FM 105.5", url: "https://mcotrc02.ice.infomaniak.ch/mcotrc02.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
-      { name: "Green Wave 106.5", url: "https://mcotrc03.ice.infomaniak.ch/mcotrc03.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" }
+      { name: "MCOT FM 95 (ลูกทุ่ง)", url: "http://onair.mcot.net:8000/fm95", logo: "https://onair.mcot.net/fm95/assets/img/logo-fm95.png", group: "Thai Radio" },
+      { name: "Met 107 FM (สากล)", url: "http://onair.mcot.net:8000/met107", logo: "https://onair.mcot.net/fm107/assets/img/logo-met107.png", group: "Thai Radio" },
+      { name: "FM 100.5 News Network", url: "http://onair.mcot.net:8000/fm1005", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
+      { name: "Cat Radio", url: "https://cast.catradio.net/live", logo: "https://www.thisiscat.com/assets/img/logo_cat_orange.png", group: "Thai Radio" },
+      { name: "Hitz 955", url: "https://v6.teroradio.com/hitz955.mp3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
+      { name: "Cool Fahrenheit 93", url: "https://n-node-03.coolism.net/cool", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Thai Radio" },
+    ]
+  },
+  { 
+    id: 'r-lofi', 
+    label: 'LOFI & CHILL', 
+    url: 'radio-lofi', 
+    channels: [
+      { name: "SomaFM Groove Salad", url: "https://ice1.somafm.com/groovesalad-128-mp3", logo: "https://somafm.com/img3/groovesalad-400.jpg", group: "Chill" },
+      { name: "SomaFM Secret Agent", url: "https://ice1.somafm.com/secretagent-128-mp3", logo: "https://somafm.com/img3/secretagent-400.jpg", group: "Chill" },
+      { name: "SomaFM Drone Zone", url: "https://ice1.somafm.com/dronezone-128-mp3", logo: "https://somafm.com/img3/dronezone-400.jpg", group: "Ambient" }
     ]
   },
   { 
     id: 'r-global', 
-    label: 'GLOBAL RADIO', 
+    label: 'UK & GLOBAL', 
     url: 'radio-global',
     channels: [
-      { name: "BBC Radio 1", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_one", group: "Global Radio" },
-      { name: "Capital FM", url: "https://icecast.thisisdax.com/CapitalUKMP3", group: "Global Radio" },
-      { name: "Heart FM", url: "https://icecast.thisisdax.com/HeartUKMP3", group: "Global Radio" }
+      { name: "Capital UK", url: "https://icecast.thisisdax.com/CapitalUKMP3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Global Radio" },
+      { name: "Heart UK", url: "https://icecast.thisisdax.com/HeartUKMP3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Global Radio" },
+      { name: "Radio X UK", url: "https://icecast.thisisdax.com/RadioXUKMP3", logo: "https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png", group: "Global Radio" }
     ]
   },
 ];
@@ -166,13 +180,33 @@ export default function App() {
     if (preset.channels) {
        // Direct load from built-in channels
        setChannels(preset.channels);
-       if (preset.channels.length > 0) setSelectedChannel(preset.channels[0]);
+       if (preset.channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(preset.channels[0]);
     } else {
       fetchPlaylist(preset.url).then(channels => {
-        if (channels && channels.length > 0) setSelectedChannel(channels[0]);
+        if (channels && channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(channels[0]);
       });
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'tv') {
+      const currentIsTv = TV_PRESETS.some(p => p.url === playlistUrl);
+      if (!currentIsTv) {
+        loadPlaylist(TV_PRESETS[0]);
+      }
+    } else if (activeTab === 'radio') {
+      const currentIsRadio = RADIO_PRESETS.some(p => p.url === playlistUrl);
+      if (!currentIsRadio) {
+        loadPlaylist(RADIO_PRESETS[0]);
+      }
+    } else if (activeTab === 'favorites') {
+       if (favorites.length > 0) {
+          setSelectedChannel(favorites[0]);
+       } else {
+          setSelectedChannel(null);
+       }
+    }
+  }, [activeTab]);
 
   // Initial load from URL
   useEffect(() => {
@@ -285,9 +319,9 @@ export default function App() {
                 className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all
                   ${activeTab === tab ? "bg-blue-600 text-white shadow-md" : "text-white/50 hover:bg-white/10"}`}
               >
-                {tab === 'tv' && 'TV'}
-                {tab === 'radio' && 'RADIO'}
-                {tab === 'favorites' && 'FAVORITES'}
+                {tab === 'tv' && 'TV / ทีวี'}
+                {tab === 'radio' && 'Radio / วิทยุ'}
+                {tab === 'favorites' && 'รายการโปรด'}
               </button>
             ))}
           </div>
@@ -296,7 +330,7 @@ export default function App() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
             <input
               type="text"
-              placeholder="Search channels..."
+              placeholder="ค้นหาช่อง..."
               value={searchQuery}
               onChange={handleSearch}
               className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-blue-500/50 text-white placeholder-white/40 transition-all"
@@ -308,7 +342,7 @@ export default function App() {
               {(activeTab === 'tv' ? TV_PRESETS : RADIO_PRESETS).map(p => (
                 <button
                   key={p.id}
-                  onClick={() => loadPlaylist(p.url, (p as any).isProtected)}
+                  onClick={() => loadPlaylist(p)}
                   className={`px-3 py-1 flex-shrink-0 text-[11px] font-bold rounded-full transition-colors ${playlistUrl === p.url ? "bg-blue-600 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"}`}
                 >
                   {p.label}
@@ -318,20 +352,22 @@ export default function App() {
           )}
           
           {/* CORS Proxy Toggle */}
-          <div className="flex items-center justify-between bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg">
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-blue-400">CORS Bypass Proxy</span>
-              <span className="text-[10px] text-white/40">แก้ปัญหาช่องที่จอค้างดูไม่ได้</span>
+          <div className="flex flex-col gap-2 bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg">
+            <div className="flex items-center justify-between w-full">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">CORS Bypass Proxy</span>
+                  <span className="text-[10px] text-white/40">แก้ปัญหาช่องที่จอค้างดูไม่ได้</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={useProxy}
+                    onChange={() => setUseProxy(!useProxy)}
+                  />
+                  <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer"
-                checked={useProxy}
-                onChange={() => setUseProxy(!useProxy)}
-              />
-              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
-            </label>
           </div>
         </div>
 
@@ -339,7 +375,7 @@ export default function App() {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-3">
               <Activity className="w-6 h-6 animate-spin text-blue-500" />
-              <span>Parsing M3U...</span>
+              <span>กําลังโหลดรายการช่อง...</span>
             </div>
           ) : error ? (
             <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-sm text-center">
@@ -354,17 +390,17 @@ export default function App() {
                   onClick={() => setSelectedChannel(channel)}
                   className={`group relative flex w-full items-center p-3 rounded-xl border text-left transition-colors
                     ${selectedChannel?.url === channel.url 
-                      ? "bg-blue-600/10 border-blue-500/30" 
+                      ? "bg-blue-600/10 border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.1)]" 
                       : "bg-white/5 border-transparent hover:bg-white/10"}`}
                 >
                   <div className={`relative flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden p-1 mr-4 transition-colors
-                    ${selectedChannel?.url === channel.url ? "bg-white" : "bg-[#222]"}`}>
+                    ${selectedChannel?.url === channel.url ? "bg-white shadow-[0_2px_10px_rgba(255,255,255,0.2)]" : "bg-[#222]"}`}>
                     {channel.logo ? (
                       <img 
                         src={channel.logo} 
                         alt={channel.name}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).src = 'https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png';
                         }}
                         className="w-full h-full object-contain"
                       />
@@ -373,6 +409,15 @@ export default function App() {
                         ${selectedChannel?.url === channel.url ? "bg-[#f0f0f0] text-blue-900" : "bg-[#333] text-white"}`}>
                           {channel.name.substring(0,3).toUpperCase()}
                       </div>
+                    )}
+                    {selectedChannel?.url === channel.url && (
+                        <div className="absolute inset-0 bg-blue-600/20 flex items-center justify-center">
+                            <div className="flex gap-0.5">
+                                <motion.div animate={{ height: [4, 10, 4] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-0.5 bg-blue-400 rounded-full" />
+                                <motion.div animate={{ height: [8, 4, 8] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-0.5 bg-blue-400 rounded-full" />
+                                <motion.div animate={{ height: [10, 2, 10] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-0.5 bg-blue-400 rounded-full" />
+                            </div>
+                        </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0 pr-8">
@@ -388,7 +433,7 @@ export default function App() {
                   <div 
                     onClick={(e) => toggleFavorite(channel, e)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/10 rounded-full transition-colors z-10"
-                    title={isFav ? "Remove from Favorites" : "Add to Favorites"}
+                    title={isFav ? "เอาออกจากรายการโปรด" : "เพิ่มในรายการโปรด"}
                   >
                     <Star className={`w-4 h-4 ${isFav ? "fill-yellow-500 text-yellow-500" : "text-white/30"}`} />
                   </div>
@@ -396,16 +441,18 @@ export default function App() {
               );
             })
           ) : (
-             <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
+             <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2 p-6 text-center">
                 {activeTab === 'favorites' ? (
                   <>
-                    <Star className="w-8 h-8 opacity-50" />
-                    <span>No favorites added yet</span>
+                    <Star className="w-8 h-8 opacity-50 mb-2" />
+                    <span className="font-medium text-white/50">ยังไม่มีรายการโปรด</span>
+                    <span className="text-[10px] text-white/20">กดรูปดาวข้างชื่อช่องเพื่อเก็บไว้ที่นี่</span>
                   </>
                 ) : (
                   <>
-                    <HelpCircle className="w-8 h-8 opacity-50" />
-                    <span>No channels active</span>
+                    <HelpCircle className="w-8 h-8 opacity-50 mb-2" />
+                    <span className="font-medium text-white/50">ไม่พบช่องที่แสดง</span>
+                    <span className="text-[10px] text-white/20">ลองเลือกแท็บอื่นหรือพิมพ์ค้นหาใหม่</span>
                   </>
                 )}
              </div>
@@ -415,8 +462,8 @@ export default function App() {
         {/* Simple URL Loader Input */}
         <div className="p-6 bg-black/40 border-t border-white/5 mt-auto">
           <div className="flex items-center justify-between text-[11px] text-white/40 mb-4 flex-wrap gap-2">
-            <span>Total Channels: {channels.length}</span>
-            <span className="flex items-center gap-1 font-mono text-green-500"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> SYSTEM READY</span>
+            <span>จำนวนช่องทั้งหมด: {channels.length}</span>
+            <span className="flex items-center gap-1 font-mono text-green-500"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> ระบบพร้อมใช้งาน (READY)</span>
           </div>
           <form 
             onSubmit={(e) => {
@@ -433,21 +480,21 @@ export default function App() {
               name="url"
               type="url"
               defaultValue={playlistUrl}
-              placeholder="Paste M3U URL..."
+              placeholder="วางลิงก์ M3U หรือ .m3u8..."
               className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500/50 text-white placeholder-white/40 min-w-0"
             />
             <button
               type="submit"
               className="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg text-xs font-bold transition-colors text-white whitespace-nowrap"
             >
-              Load
+              โหลดช่อง
             </button>
           </form>
         </div>
       </div>
 
       {/* Right Side - Video Player */}
-      <div className="flex-1 bg-black relative flex flex-col h-1/2 md:h-full z-0 overflow-hidden">
+      <div id="main-player-container" className="flex-1 bg-black relative flex flex-col h-1/2 md:h-full z-0 overflow-hidden">
         <div className="absolute inset-0 bg-[#0f0f12] flex items-center justify-center">
             <div className="absolute inset-0 bg-gradient-to-tr from-blue-900/20 to-transparent pointer-events-none"></div>
             
@@ -457,7 +504,7 @@ export default function App() {
             {selectedChannel ? (
             <div className="relative z-20 w-full h-full flex flex-col group/player">
                 <HlsPlayer 
-                  url={useProxy && !selectedChannel.url.toLowerCase().endsWith('.mp3') && !selectedChannel.url.toLowerCase().endsWith('.aac') ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} 
+                  url={useProxy ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} 
                   originalUrl={selectedChannel.url}
                 />
                 
@@ -482,13 +529,33 @@ export default function App() {
                             </div>
                         </div>
                       </div>
-                      <div className="text-left md:text-right flex-shrink-0">
-                        <p className="text-[10px] md:text-xs text-white/40 mb-1 uppercase tracking-widest hidden md:block">Status</p>
-                        <div className="flex items-center gap-2 md:justify-end bg-red-600/10 border border-red-500/20 px-3 py-1 md:py-1.5 md:px-0 md:bg-transparent md:border-none rounded-full w-fit">
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
-                            <p className="text-xs md:text-sm font-bold text-red-500 md:text-white tracking-widest">LIVE NOW</p>
+                    <div className="flex items-center gap-4 text-left md:text-right flex-shrink-0">
+                        <div className="hidden md:flex flex-col items-end mr-2">
+                             <p className="text-[10px] text-white/40 mb-1 uppercase tracking-widest">โหมดเต็มจอ</p>
+                             <button
+                                onClick={() => {
+                                    const el = document.getElementById('main-player-container');
+                                    if (el) {
+                                        if (!document.fullscreenElement) {
+                                            el.requestFullscreen();
+                                        } else {
+                                            document.exitFullscreen();
+                                        }
+                                    }
+                                }}
+                                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white transition-colors"
+                             >
+                                <Maximize className="w-5 h-5" />
+                             </button>
                         </div>
-                      </div>
+                        <div className="flex flex-col items-start md:items-end">
+                            <p className="text-[10px] md:text-xs text-white/40 mb-1 uppercase tracking-widest hidden md:block">สถานะ (Status)</p>
+                            <div className="flex items-center gap-2 md:justify-end bg-red-600/10 border border-red-500/20 px-3 py-1 md:py-1.5 md:px-0 md:bg-transparent md:border-none rounded-full w-fit">
+                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
+                                <p className="text-xs md:text-sm font-bold text-red-500 md:text-white tracking-widest">ถ่ายทอดสด (LIVE)</p>
+                            </div>
+                        </div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -496,8 +563,8 @@ export default function App() {
             ) : (
             <div className="relative z-20 flex flex-col items-center justify-center h-full text-white/20">
                 <Tv className="w-16 h-16 md:w-24 md:h-24 mb-6 opacity-30" />
-                <h2 className="text-xl md:text-2xl font-bold tracking-widest">NO SIGNAL</h2>
-                <p className="text-xs md:text-sm mt-2 opacity-50 uppercase tracking-widest px-4 text-center">Select a channel from the guide to begin playback</p>
+                <h2 className="text-xl md:text-2xl font-bold tracking-widest uppercase">ไม่มีสัญญาณ (NO SIGNAL)</h2>
+                <p className="text-xs md:text-sm mt-2 opacity-50 uppercase tracking-widest px-4 text-center">กรุณาเลือกช่องจากรายการด้านซ้ายเพื่อเริ่มรับชม</p>
             </div>
             )}
         </div>

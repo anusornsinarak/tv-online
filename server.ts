@@ -24,34 +24,38 @@ async function startServer() {
     try {
       const response = await fetch(targetUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36",
-          "Referer": urlObj.origin
-        }
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": urlObj.origin,
+          "Accept": "*/*",
+          "Connection": "keep-alive"
+        },
+        signal: AbortSignal.timeout(30000) // Increase connection timeout to 30s
       });
 
       if (!response.ok) {
-         return res.status(response.status).send(`Failed to fetch proxy target: ${response.statusText}`);
+        console.warn(`Proxy fail: ${targetUrl} -> ${response.status} ${response.statusText}`);
+        return res.status(response.status).send(`Proxy failed to reach target: ${response.statusText}`);
       }
 
       const contentType = response.headers.get("content-type") || "application/octet-stream";
       res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Icy-MetaData", "1"); // Helpful for radio streams
 
       // If it's a playlist, rewrite the inner URLs so they also pass through this proxy
-      if (contentType.includes("mpegurl") || targetUrl.includes(".m3u8")) {
+      if (contentType.includes("mpegurl") || contentType.includes("mpegURL") || targetUrl.includes(".m3u8")) {
         const text = await response.text();
         const baseUrl = new URL(targetUrl);
         
         const lines = text.split(/\r?\n/);
         const rewrittenLines = lines.map(line => {
            const trimmed = line.trim();
-           // Rewrite direct TS or M3U8 absolute/relative URIs
            if (trimmed && !trimmed.startsWith("#")) {
                try {
                    const absUrl = new URL(trimmed, baseUrl).toString();
                    return `/api/proxy?url=${encodeURIComponent(absUrl)}`;
                } catch { return line; }
            }
-           // Rewrite URIs located in #EXT-X tags (e.g. URI="sub_playlist.m3u8" or Keys)
            if (trimmed.startsWith("#EXT-X-") && trimmed.includes('URI=')) {
                return trimmed.replace(/URI="([^"]+)"/, (match, uriParam) => {
                    try {
@@ -69,14 +73,23 @@ async function startServer() {
         // Stream raw data (.ts video chunks, encryption keys, or infinite radio streams)
         res.setHeader("Content-Type", contentType);
         if (response.body) {
-          Readable.fromWeb(response.body as any).pipe(res);
+          // Properly cast web stream to node readable if needed
+          const nodeStream = Readable.fromWeb(response.body as any);
+          nodeStream.pipe(res);
+          
+          res.on('close', () => {
+             // Try to abort the fetch if the client closes connection
+             nodeStream.destroy();
+          });
         } else {
           res.end();
         }
       }
     } catch (err: any) {
       console.error("Proxy Fetch Error:", err.message);
-      res.status(500).send(`Proxy error: ${err.message}`);
+      if (!res.headersSent) {
+        res.status(500).send(`Proxy error: ${err.message}`);
+      }
     }
   });
 
@@ -94,12 +107,18 @@ https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
   app.get("/api/playlists/radio-th.m3u", (req, res) => {
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
     res.send(`#EXTM3U
-#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="Thai Radio",Hitz 955
-https://mcotrc01.ice.infomaniak.ch/mcotrc01.mp3
-#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="Thai Radio",Eazy FM 105.5
-https://mcotrc02.ice.infomaniak.ch/mcotrc02.mp3
-#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="Thai Radio",Green Wave 106.5
-https://mcotrc03.ice.infomaniak.ch/mcotrc03.mp3
+#EXTINF:-1 tvg-logo="https://onair.mcot.net/fm95/assets/img/logo-fm95.png" group-title="วิทยุไทย",MCOT FM 95 (ลูกทุ่งมหานคร)
+http://61.19.18.232:1935/live/fm95.stream/playlist.m3u8
+#EXTINF:-1 tvg-logo="https://onair.mcot.net/fm107/assets/img/logo-met107.png" group-title="วิทยุไทย",Met 107 FM
+http://61.19.18.232:1935/live/met107.stream/playlist.m3u8
+#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="วิทยุไทย",FM 100.5 (News Network)
+http://61.19.18.232:1935/live/fm1005.stream/playlist.m3u8
+#EXTINF:-1 tvg-logo="https://www.thisiscat.com/assets/img/logo_cat_orange.png" group-title="วิทยุไทย",Cat Radio
+https://cast01.catradio.net/live
+#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="วิทยุไทย",Hitz 955
+https://bkk-live.teroradio.com/hitz955.mp3
+#EXTINF:-1 tvg-logo="https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png" group-title="วิทยุไทย",Cool Fahrenheit 93
+https://n-node-01.coolism.net/cool
 `);
   });
 
