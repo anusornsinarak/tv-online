@@ -1,0 +1,6 @@
+{
+  "name": "Android TV IPTV Player",
+  "description": "An IPTV player tailored for TV layout featuring an M3U parser and integrated HLS streaming.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
