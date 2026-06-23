@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { Readable } from "stream";
+import * as cheerio from "cheerio";
 
 async function startServer() {
   const app = express();
@@ -203,6 +204,80 @@ https://icecast.thisisdax.com/HeartUKMP3
       res.status(500).json({ error: error.message || "Failed to parse M3U" });
     }
   });
+
+  // NungFree / Clean Source Scraping API
+  app.get("/api/movies/nungfree/list", async (req, res) => {
+    const query = req.query.s as string;
+    const catUrl = req.query.srcUrl as string;
+    
+    let url = "https://www.123-hds.com/";
+    if (catUrl) {
+       url = catUrl.toString();
+    } else if (query) {
+       url = `https://www.123-hds.com/?s=${encodeURIComponent(query)}`;
+    }
+    
+    try {
+       const response = await fetch(url, {
+         headers: {
+           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+         }
+       });
+       const html = await response.text();
+       const $ = cheerio.load(html);
+       const movies: any[] = [];
+
+       $(".movies-list .ml-item, article, .item, .box-item").each((i, el) => {
+         const title = $(el).find('.title, h2, h3, h4').text().trim() || $(el).find('img').attr('alt');
+         const a = $(el).find('a').first();
+         const link = a.attr("href");
+         const imgEl = $(el).find('img').first();
+         
+         let img = imgEl.attr('data-src') || imgEl.attr('data-original') || imgEl.attr('src');
+         // convert relative to absolute if needed
+         if (img && img.startsWith('/')) img = "https://www.123-hds.com" + img;
+         
+         const isNew = i < 8; // Tag the first 8 movies as "NEW"
+         
+         if (title && link) {
+           movies.push({ name: title, url: link, poster: img, group: "NungFree 4K", isNew });
+         }
+       });
+
+       res.json({ movies });
+    } catch (error: any) {
+       console.error("NungFree Scrape Error:", error);
+       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/movies/nungfree/stream", async (req, res) => {
+    const pageUrl = req.query.url as string;
+    if (!pageUrl) return res.status(400).send("No URL");
+
+    try {
+      const response = await fetch(pageUrl, {
+         headers: {
+           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+         }
+      });
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      
+      const iframe = $("iframe[src*='player'], iframe[src*='embed'], iframe").first().attr("src");
+      
+      if (iframe) {
+         res.json({ streamUrl: iframe });
+      } else {
+         res.status(404).json({ error: "Stream iframe not found on this page" });
+      }
+    } catch (error: any) {
+      console.error("NungFree Stream Scrape Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // End of parse-m3u route
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

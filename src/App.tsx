@@ -4,7 +4,7 @@ import { Channel } from "./types";
 import { HlsPlayer } from "./components/HlsPlayer";
 import { Tv, List, Search, Play, HelpCircle, Activity, Star, Share2, Radio, Lock, Copy, Maximize, Minimize } from "lucide-react";
 
-type TabType = 'tv' | 'radio' | 'favorites';
+type TabType = 'tv' | 'radio' | 'movies' | 'favorites';
 
 interface Preset {
   id: string;
@@ -21,8 +21,23 @@ const TV_PRESETS: Preset[] = [
   { id: 'asia', label: 'ASIA ZONE', url: 'https://iptv-org.github.io/iptv/regions/asia.m3u' },
   { id: 'eur', label: 'EUROPE', url: 'https://iptv-org.github.io/iptv/regions/eur.m3u' },
   { id: 'amer', label: 'AMERICA', url: 'https://iptv-org.github.io/iptv/regions/amer.m3u' },
-  { id: 'movies', label: 'MOVIES', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
+  { id: 'movies', label: 'MOVIES TV', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
   { id: 'sports', label: 'SPORTS', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
+];
+
+const MOVIE_PRESETS: Preset[] = [
+  { id: '24hd', label: 'อัพเดตล่าสุด (NEW)', url: '24hd' },
+  { id: 'cat-action', label: 'หนังแอคชั่น', url: 'cat-https://www.123-hds.com/category/ภาพยนตร์/ดูหนังแอคชั่น/' },
+  { id: 'cat-sci-fi', label: 'ไซไฟ / แฟนตาซี', url: 'cat-https://www.123-hds.com/category/ภาพยนตร์/ดูหนังไซไฟ/' },
+  { id: 'cat-horror', label: 'สยองขวัญ', url: 'cat-https://www.123-hds.com/category/ภาพยนตร์/หนังสยองขวัญ/' },
+  { id: 'cat-comedy', label: 'ตลกคอมเมดี้', url: 'cat-https://www.123-hds.com/category/ภาพยนตร์/หนังตลก/' },
+  { id: 'cat-animation', label: 'แอนิเมชั่น', url: 'cat-https://www.123-hds.com/category/ภาพยนตร์/ดูหนังการ์ตูน/' },
+  { id: 'cat-nungfree4k', label: 'NungFree 4K (เว็บนอก)', url: 'link-https://nungfree4k.com/' },
+  { id: 'cat-bilibili', label: 'Bilibili TH (เว็บนอก)', url: 'link-https://www.bilibili.tv/th/' },
+  { id: 'mv-global', label: 'IPTV: MOVIE CHANNELS', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
+  { id: 'mv-animation', label: 'IPTV: ANIMATION', url: 'https://iptv-org.github.io/iptv/categories/animation.m3u' },
+  { id: 'mv-documentary', label: 'IPTV: DOCUMENTARY', url: 'https://iptv-org.github.io/iptv/categories/documentary.m3u' },
+  { id: 'mv-classic', label: 'IPTV: CLASSIC', url: 'https://iptv-org.github.io/iptv/categories/classic.m3u' },
 ];
 
 const RADIO_PRESETS: Preset[] = [
@@ -98,6 +113,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [useProxy, setUseProxy] = useState(false);
+  const [iframeStreamUrl, setIframeStreamUrl] = useState<string | null>(null);
+  const [fetchingStream, setFetchingStream] = useState(false);
   
   const [activeTab, setActiveTab] = useState<TabType>('tv');
   const [favorites, setFavorites] = useState<Channel[]>(() => {
@@ -107,19 +124,19 @@ export default function App() {
     } catch { return []; }
   });
 
-  // Background indexing for global search
   useEffect(() => {
-    // Initial pool with radio channels
     const radioChannels = RADIO_PRESETS.flatMap(p => p.channels || []);
-    setGlobalPool(radioChannels);
+    const movieChannels = MOVIE_PRESETS.flatMap(p => p.channels || []);
+    setGlobalPool([...radioChannels, ...movieChannels]);
 
     const loadGlobalPool = async () => {
-      // Small delay to let initial page load finish
       await new Promise(r => setTimeout(r, 2000));
-      
-      for (const preset of TV_PRESETS) {
+      const allPresets = [...TV_PRESETS, ...MOVIE_PRESETS];
+      for (const preset of allPresets) {
+        if (preset.channels) continue;
         try {
-          const res = await fetch(preset.url);
+          const proxyUrl = `/api/proxy?url=${encodeURIComponent(preset.url)}`;
+          const res = await fetch(proxyUrl);
           if (!res.ok) continue;
           const text = await res.text();
           const parsed = parseM3U(text);
@@ -129,20 +146,52 @@ export default function App() {
             combined.forEach(c => uniqueMap.set(c.url, c));
             return Array.from(uniqueMap.values());
           });
-          // Small delay between fetches to be nice
           await new Promise(r => setTimeout(r, 500));
         } catch (e) {
           console.error(`Search index failed for ${preset.label}:`, e);
         }
       }
     };
-
     loadGlobalPool();
   }, []);
 
   useEffect(() => {
     localStorage.setItem('iptv_favorites', JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    if (selectedChannel?.isIframe) {
+       setFetchingStream(true);
+       setIframeStreamUrl(null);
+       
+       if (selectedChannel.group === "NungFree 4K") {
+          // just try to embed the movie page directly 
+          // 123-hd player page is usually at /watch-<movie-slug>
+          try {
+             const urlObj = new URL(selectedChannel.url);
+             const pathParts = urlObj.pathname.split('/').filter(Boolean);
+             const slug = pathParts[pathParts.length - 1]; // e.g. absolution-2024
+             const watchUrl = `https://www.123-hds.com/watch-${slug}`;
+             setIframeStreamUrl(watchUrl);
+          } catch(e) {
+             setIframeStreamUrl(selectedChannel.url);
+          }
+          setFetchingStream(false);
+          return;
+       }
+
+       fetch(`/api/movies/nungfree/stream?url=${encodeURIComponent(selectedChannel.url)}`)
+         .then(res => res.json())
+         .then(data => {
+            if (data.streamUrl) setIframeStreamUrl(data.streamUrl);
+         })
+         .catch(err => {
+            console.error("Stream fetch error:", err);
+            setError("ไม่สามารถโหลดไฟล์วิดีโอได้จากแหล่งที่มานี้");
+         })
+         .finally(() => setFetchingStream(false));
+    }
+  }, [selectedChannel]);
 
   const toggleFavorite = (channel: Channel, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -158,7 +207,6 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // First try the backend proxy (if running in full-stack mode)
       let res;
       try {
         res = await fetch("/api/parse-m3u", {
@@ -166,9 +214,7 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url })
         });
-      } catch (e) {
-        // Network error reaching proxy
-      }
+      } catch (e) {}
       
       if (res && res.ok) {
         const data = await res.json();
@@ -177,15 +223,12 @@ export default function App() {
         return data.channels;
       }
 
-      // Fallback: Client-side parsing (for static Vercel deployments)
       const directRes = await fetch(url);
       if (!directRes.ok) throw new Error("Failed to load playlist directly.");
       const text = await directRes.text();
-      
       const parsedChannels = parseM3U(text);
       setChannels(parsedChannels);
       return parsedChannels;
-      
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
       return [];
@@ -194,24 +237,65 @@ export default function App() {
     }
   };
 
-  const loadPlaylist = (presetOrUrl: typeof TV_PRESETS[0] | string | any) => {
-    if (typeof presetOrUrl === 'string') {
-      setPlaylistUrl(presetOrUrl);
-      fetchPlaylist(presetOrUrl).then(channels => {
-        if (channels && channels.length > 0) setSelectedChannel(channels[0]);
-      });
-      return;
+  const fetchMovies = async (query?: string, srcUrl?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let url = `/api/movies/nungfree/list`;
+      const params = new URLSearchParams();
+      if (query) params.append("s", query);
+      if (srcUrl) params.append("srcUrl", srcUrl);
+      if (params.toString()) {
+         url += `?${params.toString()}`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch movies from server");
+      const data = await res.json();
+      const movieChannels = data.movies.map((m: any) => ({
+         ...m,
+         isIframe: true
+      }));
+      setChannels(movieChannels);
+      return movieChannels;
+    } catch (err: any) {
+      setError(err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPlaylist = (presetOrUrl: any) => {
+    let targetUrl = typeof presetOrUrl === 'string' ? presetOrUrl : presetOrUrl.url;
+
+    if (targetUrl.startsWith('link-')) {
+       window.open(targetUrl.substring(5), '_blank');
+       return;
     }
 
-    const preset = presetOrUrl;
-    setPlaylistUrl(preset.url);
+    setPlaylistUrl(targetUrl);
 
-    if (preset.channels) {
-       // Direct load from built-in channels
+    if (targetUrl === '24hd') {
+       fetchMovies().then(channels => {
+          if (channels && channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(channels[0]);
+       });
+       return;
+    }
+
+    if (targetUrl.startsWith('cat-')) {
+       const srcUrl = targetUrl.substring(4);
+       fetchMovies(undefined, srcUrl).then(channels => {
+          if (channels && channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(channels[0]);
+       });
+       return;
+    }
+
+    const preset = typeof presetOrUrl === 'string' ? null : presetOrUrl;
+    if (preset && preset.channels) {
        setChannels(preset.channels);
        if (preset.channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(preset.channels[0]);
     } else {
-      fetchPlaylist(preset.url).then(channels => {
+      fetchPlaylist(targetUrl).then(channels => {
         if (channels && channels.length > 0 && activeTab !== 'favorites') setSelectedChannel(channels[0]);
       });
     }
@@ -220,31 +304,25 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'tv') {
       const currentIsTv = TV_PRESETS.some(p => p.url === playlistUrl);
-      if (!currentIsTv) {
-        loadPlaylist(TV_PRESETS[0]);
-      }
+      if (!currentIsTv) loadPlaylist(TV_PRESETS[0]);
     } else if (activeTab === 'radio') {
       const currentIsRadio = RADIO_PRESETS.some(p => p.url === playlistUrl);
-      if (!currentIsRadio) {
-        loadPlaylist(RADIO_PRESETS[0]);
-      }
+      if (!currentIsRadio) loadPlaylist(RADIO_PRESETS[0]);
+    } else if (activeTab === 'movies') {
+      const currentIsMovie = MOVIE_PRESETS.some(p => p.url === playlistUrl);
+      if (!currentIsMovie) loadPlaylist(MOVIE_PRESETS[0]);
     } else if (activeTab === 'favorites') {
-       if (favorites.length > 0) {
-          setSelectedChannel(favorites[0]);
-       } else {
-          setSelectedChannel(null);
-       }
+       if (favorites.length > 0) setSelectedChannel(favorites[0]);
+       else setSelectedChannel(null);
     }
   }, [activeTab]);
 
-  // Initial load from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const pUrl = params.get("playlist") || "https://iptv-org.github.io/iptv/countries/th.m3u";
     const cUrl = params.get("channel");
     
-    // Is it a static predefined literal?
-    const allPresets: Preset[] = [...TV_PRESETS, ...RADIO_PRESETS];
+    const allPresets: Preset[] = [...TV_PRESETS, ...RADIO_PRESETS, ...MOVIE_PRESETS];
     const matchingPreset = allPresets.find(p => p.url === pUrl);
     
     if (matchingPreset && matchingPreset.channels) {
@@ -272,7 +350,6 @@ export default function App() {
     }
   }, []);
 
-  // Update URL on change
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (playlistUrl !== "https://iptv-org.github.io/iptv/countries/th.m3u" || params.has("playlist")) {
@@ -293,14 +370,10 @@ export default function App() {
     if (!searchQuery) {
       return activeTab === 'favorites' ? favorites : channels;
     }
-
-    // Integrated search: scan current view, favorites, and global background index
     const combined = [...channels, ...favorites, ...globalPool];
-    
     const uniqueMap = new Map();
     combined.forEach(c => uniqueMap.set(c.url, c));
     const uniqueSource = Array.from(uniqueMap.values()) as Channel[];
-    
     const query = searchQuery.toLowerCase();
     return uniqueSource.filter(c => 
       c.name.toLowerCase().includes(query) || 
@@ -318,7 +391,6 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-[#050505] text-[#e0e0e0] font-sans overflow-hidden">
       
-      {/* Left Sidebar - Channels List */}
       <div className="w-full md:w-[340px] bg-[#0a0a0f] flex flex-col border-r border-white/5 shadow-2xl z-20 flex-shrink-0 transition-transform h-1/2 md:h-full pb-0 md:pb-0">
         <div className="p-6 md:p-8 pb-4 space-y-6">
           <div className="flex items-center justify-between gap-3">
@@ -342,20 +414,51 @@ export default function App() {
             )}
           </div>
 
-          {/* Main Tabs */}
           <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
-            {(['tv', 'radio', 'favorites'] as const).map(tab => (
+            {(['tv', 'radio', 'movies', 'favorites'] as const).map(tab => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all
-                  ${activeTab === tab ? "bg-blue-600 text-white shadow-md" : "text-white/50 hover:bg-white/10"}`}
+                onClick={() => {
+                  setActiveTab(tab);
+                  if (tab === 'movies' && MOVIE_PRESETS.length > 0) loadPlaylist(MOVIE_PRESETS[0]);
+                  else if (tab === 'radio' && RADIO_PRESETS.length > 0) loadPlaylist(RADIO_PRESETS[0]);
+                }}
+                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all
+                  ${activeTab === tab ? "bg-blue-600 text-white shadow-md font-black" : "text-white/50 hover:bg-white/10"}`}
               >
-                {tab === 'tv' && 'TV / ทีวี'}
-                {tab === 'radio' && 'Radio / วิทยุ'}
-                {tab === 'favorites' && 'รายการโปรด'}
+                {tab === 'tv' && 'TV'}
+                {tab === 'radio' && 'Radio'}
+                {tab === 'movies' && 'Movie'}
+                {tab === 'favorites' && '★'}
               </button>
             ))}
+          </div>
+
+          <div className="pt-0">
+             <form 
+               onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const query = formData.get("key") as string;
+                  if (query) {
+                     setActiveTab('movies');
+                     setPlaylistUrl('24hd');
+                     fetchMovies(query);
+                  }
+               }}
+               className="group relative"
+              >
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 z-10" />
+                <input
+                  name="key"
+                  type="text"
+                  placeholder="ค้นหาหนัง/อนิเมะฟรี (ไม่เด้ง)..."
+                  className="w-full bg-orange-600/10 border border-orange-500/20 rounded-xl py-3 pl-10 pr-10 text-xs focus:outline-none focus:border-orange-500 text-white placeholder-orange-400/60 transition-all focus:bg-orange-600/20"
+                />
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 bg-orange-600 p-1 rounded-md shadow-lg shadow-orange-600/20 group-hover:scale-110 transition-transform cursor-pointer">
+                   <Play className="w-3 h-3 text-white fill-white" />
+                </button>
+              </form>
           </div>
           
           <div className="relative">
@@ -371,7 +474,7 @@ export default function App() {
 
           {activeTab !== 'favorites' && (
             <div className="flex gap-2 w-full overflow-x-auto custom-scrollbar pb-1">
-              {(activeTab === 'tv' ? TV_PRESETS : RADIO_PRESETS).map(p => (
+              {(activeTab === 'tv' ? TV_PRESETS : activeTab === 'radio' ? RADIO_PRESETS : MOVIE_PRESETS).map(p => (
                 <button
                   key={p.id}
                   onClick={() => loadPlaylist(p)}
@@ -383,7 +486,6 @@ export default function App() {
             </div>
           )}
           
-          {/* CORS Proxy Toggle */}
           <div className="flex flex-col gap-2 bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg">
             <div className="flex items-center justify-between w-full">
                 <div className="flex flex-col">
@@ -391,12 +493,7 @@ export default function App() {
                   <span className="text-[10px] text-white/40">แก้ปัญหาช่องที่จอค้างดูไม่ได้</span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer"
-                    checked={useProxy}
-                    onChange={() => setUseProxy(!useProxy)}
-                  />
+                  <input type="checkbox" className="sr-only peer" checked={useProxy} onChange={() => setUseProxy(!useProxy)} />
                   <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
                 </label>
             </div>
@@ -421,26 +518,18 @@ export default function App() {
                   key={`${channel.url}-${i}`}
                   onClick={() => setSelectedChannel(channel)}
                   className={`group relative flex w-full items-center p-3 rounded-xl border text-left transition-colors
-                    ${selectedChannel?.url === channel.url 
-                      ? "bg-blue-600/10 border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.1)]" 
-                      : "bg-white/5 border-transparent hover:bg-white/10"}`}
+                    ${selectedChannel?.url === channel.url ? "bg-blue-600/10 border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.1)]" : "bg-white/5 border-transparent hover:bg-white/10"}`}
                 >
-                  <div className={`relative flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden p-1 mr-4 transition-colors
+                  <div className={`relative flex-shrink-0 w-12 h-16 rounded-lg flex items-center justify-center overflow-hidden mr-4 transition-colors
                     ${selectedChannel?.url === channel.url ? "bg-white shadow-[0_2px_10px_rgba(255,255,255,0.2)]" : "bg-[#222]"}`}>
-                    {channel.logo ? (
-                      <img 
-                        src={channel.logo} 
-                        alt={channel.name}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png';
-                        }}
-                        className="w-full h-full object-contain"
-                      />
+                    {channel.poster ? (
+                       <img src={channel.poster} alt={channel.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : channel.logo ? (
+                       <img src={channel.logo} alt={channel.name} onError={(e) => { (e.target as HTMLImageElement).src = 'https://cdn.pixabay.com/photo/2013/07/12/18/17/radio-153212_1280.png'; }} className="w-full h-full object-contain p-1" />
                     ) : (
-                      <div className={`w-full h-full rounded flex items-center justify-center font-black text-[10px]
-                        ${selectedChannel?.url === channel.url ? "bg-[#f0f0f0] text-blue-900" : "bg-[#333] text-white"}`}>
-                          {channel.name.substring(0,3).toUpperCase()}
-                      </div>
+                       <div className={`w-full h-full rounded flex items-center justify-center font-black text-[10px] ${selectedChannel?.url === channel.url ? "bg-[#f0f0f0] text-blue-900" : "bg-[#333] text-white"}`}>
+                           {channel.name.substring(0,3).toUpperCase()}
+                       </div>
                     )}
                     {selectedChannel?.url === channel.url && (
                         <div className="absolute inset-0 bg-blue-600/20 flex items-center justify-center">
@@ -453,20 +542,15 @@ export default function App() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0 pr-8">
-                    <div className={`text-sm font-bold truncate ${selectedChannel?.url === channel.url ? "text-white" : "text-white/70"}`}>
-                      {channel.name}
+                    <div className={`text-sm font-bold truncate flex items-center gap-2 ${selectedChannel?.url === channel.url ? "text-white" : "text-white/70"}`}>
+                       <span className="truncate">{channel.name}</span>
+                       {channel.isNew && (
+                         <span className="bg-red-600 text-white min-w-fit text-[9px] px-1.5 py-0.5 rounded uppercase tracking-widest font-black shadow-lg shadow-red-600/30">New</span>
+                       )}
                     </div>
-                    <div className={`text-[11px] truncate mt-0.5 ${selectedChannel?.url === channel.url ? "text-blue-400" : "text-white/30"}`}>
-                      {channel.group || "IPTV Channel"}
-                    </div>
+                    <div className={`text-[11px] truncate mt-0.5 ${selectedChannel?.url === channel.url ? "text-blue-400" : "text-white/30"}`}>{channel.group || "IPTV Channel"}</div>
                   </div>
-                  
-                  {/* Favorite Toggle button */}
-                  <div 
-                    onClick={(e) => toggleFavorite(channel, e)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/10 rounded-full transition-colors z-10"
-                    title={isFav ? "เอาออกจากรายการโปรด" : "เพิ่มในรายการโปรด"}
-                  >
+                  <div onClick={(e) => toggleFavorite(channel, e)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/10 rounded-full transition-colors z-10" title={isFav ? "เอาออกจากรายการโปรด" : "เพิ่มในรายการโปรด"}>
                     <Star className={`w-4 h-4 ${isFav ? "fill-yellow-500 text-yellow-500" : "text-white/30"}`} />
                   </div>
                 </button>
@@ -491,56 +575,43 @@ export default function App() {
           )}
         </div>
         
-        {/* Simple URL Loader Input */}
         <div className="p-6 bg-black/40 border-t border-white/5 mt-auto">
           <div className="flex items-center justify-between text-[11px] text-white/40 mb-4 flex-wrap gap-2">
             <span>จำนวนช่องทั้งหมด: {channels.length}</span>
             <span className="flex items-center gap-1 font-mono text-green-500"><div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div> ระบบพร้อมใช้งาน (READY)</span>
           </div>
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const url = formData.get("url") as string;
-              if (url) {
-                loadPlaylist(url);
-              }
-            }}
-            className="flex gap-2"
-          >
-             <input
-              name="url"
-              type="url"
-              defaultValue={playlistUrl}
-              placeholder="วางลิงก์ M3U หรือ .m3u8..."
-              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500/50 text-white placeholder-white/40 min-w-0"
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg text-xs font-bold transition-colors text-white whitespace-nowrap"
-            >
-              โหลดช่อง
-            </button>
+          <form onSubmit={(e) => { e.preventDefault(); const formData = new FormData(e.currentTarget); const url = formData.get("url") as string; if (url) loadPlaylist(url); }} className="flex gap-2">
+             <input name="url" type="url" defaultValue={playlistUrl} placeholder="วางลิงก์ M3U หรือ .m3u8..." className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500/50 text-white placeholder-white/40 min-w-0" />
+            <button type="submit" className="bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg text-xs font-bold transition-colors text-white whitespace-nowrap">โหลดช่อง</button>
           </form>
         </div>
       </div>
 
-      {/* Right Side - Video Player */}
       <div id="main-player-container" className="flex-1 bg-black relative flex flex-col h-1/2 md:h-full z-0 overflow-hidden">
         <div className="absolute inset-0 bg-[#0f0f12] flex items-center justify-center">
             <div className="absolute inset-0 bg-gradient-to-tr from-blue-900/20 to-transparent pointer-events-none"></div>
-            
-            {/* Background Glows */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none"></div>
 
             {selectedChannel ? (
             <div className="relative z-20 w-full h-full flex flex-col group/player">
-                <HlsPlayer 
-                  url={useProxy ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} 
-                  originalUrl={selectedChannel.url}
-                />
+                {selectedChannel.isIframe ? (
+                   <div className="w-full h-full relative">
+                      {fetchingStream && (
+                         <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center gap-4">
+                            <Activity className="w-8 h-8 text-orange-500 animate-spin" />
+                            <span className="text-white text-sm font-bold tracking-widest uppercase">กำลังดึงข้อมูลหนัง...</span>
+                         </div>
+                      )}
+                      {iframeStreamUrl ? (
+                         <iframe src={iframeStreamUrl} className="w-full h-full border-0" allowFullScreen allow="autoplay; encrypted-media" />
+                      ) : !fetchingStream && (
+                         <div className="absolute inset-0 flex items-center justify-center text-white/50 text-sm">ไม่พบแหล่งที่มาวิดีโอ</div>
+                      )}
+                   </div>
+                ) : (
+                  <HlsPlayer url={useProxy ? `/api/proxy?url=${encodeURIComponent(selectedChannel.url)}` : selectedChannel.url} originalUrl={selectedChannel.url} />
+                )}
                 
-                {/* OSD (On-Screen Display) for TV overlay style */}
                 <div className="absolute bottom-0 inset-x-0 p-4 md:p-8 pt-24 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none opacity-0 group-hover/player:opacity-100 transition-opacity duration-500 sm:opacity-100 flex flex-col justify-end">
                   <div className="bg-black/80 backdrop-blur-2xl p-6 md:p-8 rounded-3xl border border-white/10 shadow-3xl pointer-events-auto">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -553,9 +624,7 @@ export default function App() {
                         <div>
                             <h2 className="text-xl md:text-3xl font-bold text-white mb-2">{selectedChannel.name}</h2>
                             <div className="flex flex-wrap items-center gap-2 md:gap-4 text-[10px] md:text-xs text-white/50 font-medium uppercase tracking-widest">
-                            {selectedChannel.group && (
-                                <span className="bg-white/10 px-2 py-0.5 rounded text-white">{selectedChannel.group}</span>
-                            )}
+                            {selectedChannel.group && <span className="bg-white/10 px-2 py-0.5 rounded text-white">{selectedChannel.group}</span>}
                             <span className="text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded bg-blue-600/10">hls stream</span>
                             <span className="opacity-50">Auto-quality</span>
                             </div>
@@ -567,13 +636,7 @@ export default function App() {
                              <button
                                 onClick={() => {
                                     const el = document.getElementById('main-player-container');
-                                    if (el) {
-                                        if (!document.fullscreenElement) {
-                                            el.requestFullscreen();
-                                        } else {
-                                            document.exitFullscreen();
-                                        }
-                                    }
+                                    if (el) { el.requestFullscreen ? el.requestFullscreen() : (el as any).webkitRequestFullscreen(); }
                                 }}
                                 className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white transition-colors"
                              >
@@ -602,21 +665,11 @@ export default function App() {
         </div>
       </div>
 
-      {/* Global generic CSS for scrollbar override */}
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #374151;
-          border-radius: 20px;
-        }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-          background-color: #4B5563;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #374151; border-radius: 20px; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #4B5563; }
       `}</style>
     </div>
   );
